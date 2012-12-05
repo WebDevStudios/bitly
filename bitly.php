@@ -7,31 +7,31 @@
  */
 
 class Bitly {
-	
+
 	// storing a copy of the api credentials
 	var $options;
-	
+
 	/**
 	 * Set our options and some hooks
 	 */
 	function __construct() {
-		
+
 		$this->options = $this->get_options();
 
 		add_action( 'admin_menu', array( $this, 'admin_menu') );
-		
+
 		// default supported post types
 		add_post_type_support( 'post', 'bitly' );
 		add_post_type_support( 'page', 'bitly' );
-		
+
 		// only hook into the publish_post hook if api credentials have been specified
 		if( isset( $this->options['api_login'] ) && isset( $this->options['api_key'] ) ) {
-		
+
 			add_action( 'publish_post', array( $this, 'publish_post' ), 50, 2 );
 			add_action( 'publish_future_post', array( $this, 'publish_post' ), 50, 2 );
 		}
 	}
-	
+
 	/**
 	 * Checks the post's status and creates a bitly url if it's publishing for the first time
 	 *
@@ -39,38 +39,38 @@ class Bitly {
 	 * @param object $post
 	 */
 	function publish_post( $post_id, $post ) {
-		
+
 		if( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE )
 			return;
-		
-		// only save short urls for the following post types		
-		if( !post_type_supports( $post->post_type, 'bitly' ) )	
+
+		// only save short urls for the following post types
+		if( !post_type_supports( $post->post_type, 'bitly' ) )
 			return;
-		
-		// only get short url when post is published	
+
+		// only get short url when post is published
 		if( $post->post_status != 'publish' )
 			return;
-		
+
 		// all good, lets make a url
 		$this->generate_bitly_url( $post_id );
 	}
-	
+
 	/**
 	 * Create a bitly url if one doesnt already exist for the passed post id
 	 *
 	 * @param int $post_id
 	 *
-	 * @return mixed 
+	 * @return mixed
 	 */
 	function generate_bitly_url( $post_id ) {
-		
+
 		extract( $this->options );
-		
+
 		$bitly_url = bitly_get_url( $post_id );
-		
+
 		if( empty( $bitly_url ) ) {
-	
-			// need to test this if the post is a time_slide	
+
+			// need to test this if the post is a time_slide
 			$params = http_build_query(
 				array(
 					'login' => $api_login,
@@ -79,63 +79,63 @@ class Bitly {
 					'format' => 'json',
 				)
 			);
-			
+
 			$rest_url = 'https://api-ssl.bitly.com/v3/shorten?' . $params;
-			
+
 			$response = wp_remote_get( $rest_url );
-			
+
 			// if we get a valid response, save the url as meta data for this post
 			if( !is_wp_error( $response ) ) {
-	
+
 				$json = json_decode( wp_remote_retrieve_body( $response ) );
-	
+
 				if( isset( $json->data->url ) ) {
 					update_post_meta( $post_id, 'bitly_url', $json->data->url );
 					return $json->data->url;
 				}
 			}
 		}
-		
+
 		return false;
-		
+
 	}
-	
+
 	/**
 	 * Wrapper function to get our bitly options
 	 */
 	function get_options() {
 		return wp_parse_args( get_option('bitly_settings'), array(
-			'bitly_api_login' => '',
-			'bitly_api_key' => ''
+			'api_login' => '',
+			'api_key' => ''
 		));
 	}
-	
+
 	/**
 	 * Register a submenu page and the settings fields we'll use on that page
 	 */
 	function admin_menu() {
-		
+
 		// reg our section
 		add_settings_section( 'api', 'API Credentials', '__return_false', 'bitly-options' );
-		
+
 		// create an api login and key field
 		add_settings_field( 'bitly_api_login', 'API Login', array( $this, 'textfield' ), 'bitly-options', 'api', array(
 			'name' => 'bitly_settings[api_login]',
 			'value' => $this->options['api_login'],
 		));
-		
+
 		add_settings_field( 'show_lede_dates', 'API Key', array( $this, 'textfield' ), 'bitly-options', 'api', array(
 			'name' => 'bitly_settings[api_key]',
 			'value' => $this->options['api_key'],
 		));
-		
+
 		// set our validation callback
 		register_setting( 'bitly_settings', 'bitly_settings', array( $this, 'validate_settings' ) );
-		
+
 		// create a sub menu page within settings menu page
 		add_submenu_page( 'options-general.php', 'Bit.ly Settings', 'Bit.ly', 'edit_theme_options', 'bitly-settings', array( $this, 'settings_page' ) );
 	}
-	
+
 	/**
 	 * Builds a simple text field
 	 */
@@ -148,20 +148,20 @@ class Bitly {
 		<input type="text" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>" class="regular-text"/>
 		<?php
 	}
-	
+
 	/**
 	 * Sanitize the values the user entered on our settings page
 	 */
 	function validate_settings( $input ) {
-		
+
 		$output = array();
-		
+
 		$output['api_login'] = sanitize_text_field( $input['api_login'] );
 		$output['api_key'] = sanitize_text_field( $input['api_key'] );
-		
+
 		return $output;
 	}
-	
+
 	/**
 	 * Build the html for our settings screen
 	 */
@@ -195,7 +195,7 @@ $bitly = new Bitly();
 function bitly_get_url( $post_id = null ) {
 
 	$post_id = empty( $post_id ) ? get_the_ID() : $post_id;
-	
+
 	return get_post_meta( $post_id, 'bitly_url', true );
 }
 
@@ -203,14 +203,14 @@ function bitly_get_url( $post_id = null ) {
  * Filter to replace the default shortlink
  */
 function bitly_shortlink( $shortlink, $id, $context ) {
-	
+
 	if ( 'post' == $context || ( 'query' == $context && is_single() ) ) {
 		if ( 'query' == $context )
 			$id = get_queried_object_id();
 		$bitly = bitly_get_url( $id );
 		if( $bitly ) $shortlink = esc_url( $bitly );
 	}
-	
+
 	return $shortlink;
 }
 add_filter( 'pre_get_shortlink', 'bitly_shortlink', 10, 3 );
@@ -219,9 +219,9 @@ add_filter( 'pre_get_shortlink', 'bitly_shortlink', 10, 3 );
  * Cron to process all of the posts that don't have bitly urls
  */
 function bitly_process_posts() {
-	
+
 	global $wpdb;
-	
+
 	// get 100 published posts that don't have a bitly url
 	$query = "
 		SELECT $wpdb->posts.ID
@@ -238,9 +238,9 @@ function bitly_process_posts() {
 		ORDER BY $wpdb->posts.post_date DESC
 		LIMIT 0, 100
 		";
-	
+
 	$posts = $wpdb->get_results( $query );
-	
+
 	if( $posts ) {
 
 		// process these posts
